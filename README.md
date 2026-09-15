@@ -11,6 +11,7 @@ A responsive, browser-only expense tracker for students. Set a monthly budget, r
 - Month, category, payment-method, and text filters
 - Category spending summary and helpful empty states
 - Data stored locally in the browser with `localStorage`
+- Export and import JSON backups to move or protect your data
 - Responsive layout with keyboard focus states and semantic, accessible markup
 
 ## Run locally

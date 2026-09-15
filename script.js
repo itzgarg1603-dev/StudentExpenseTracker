@@ -49,6 +49,9 @@
     filterPayment: document.querySelector("#filter-payment"),
     filterSearch: document.querySelector("#filter-search"),
     clearFilters: document.querySelector("#clear-filters"),
+    exportData: document.querySelector("#export-data"),
+    importData: document.querySelector("#import-data"),
+    importFile: document.querySelector("#import-file"),
     expensesBody: document.querySelector("#expenses-body"),
     expensesEmpty: document.querySelector("#expenses-empty"),
     emptyTitle: document.querySelector("#empty-title"),
@@ -73,6 +76,9 @@
     elements.filtersForm.addEventListener("input", updateFilters);
     elements.filtersForm.addEventListener("change", updateFilters);
     elements.clearFilters.addEventListener("click", clearFilters);
+    elements.exportData.addEventListener("click", exportData);
+    elements.importData.addEventListener("click", () => elements.importFile.click());
+    elements.importFile.addEventListener("change", importData);
     elements.expensesBody.addEventListener("click", handleTableAction);
   }
 
@@ -301,6 +307,70 @@
     elements.filterPayment.value = "";
     elements.filterSearch.value = "";
     updateFilters();
+  }
+
+  function exportData() {
+    const backup = {
+      app: "Student Expense Tracker",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      expenses: state.expenses,
+      budgets: state.budgets,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `student-expense-tracker-${todayString}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      try {
+        const imported = JSON.parse(String(reader.result));
+        if (!Array.isArray(imported.expenses) || !imported.budgets || typeof imported.budgets !== "object") {
+          throw new Error("Invalid backup structure");
+        }
+        const expenses = imported.expenses.filter(isValidImportedExpense).map((expense) => ({
+          id: String(expense.id),
+          amount: roundMoney(Number(expense.amount)),
+          category: String(expense.category),
+          date: expense.date,
+          description: String(expense.description).trim(),
+          paymentMethod: String(expense.paymentMethod),
+        }));
+        if (!window.confirm(`Replace current data with ${expenses.length} imported expenses?`)) return;
+        state.expenses = expenses;
+        state.budgets = sanitizeBudgets(imported.budgets);
+        save(STORAGE_KEYS.expenses, state.expenses);
+        save(STORAGE_KEYS.budgets, state.budgets);
+        render();
+        window.alert("Data imported successfully.");
+      } catch (error) {
+        console.error("Unable to import expense tracker backup.", error);
+        window.alert("That file is not a valid expense tracker backup.");
+      } finally {
+        elements.importFile.value = "";
+      }
+    });
+    reader.readAsText(file);
+  }
+
+  function isValidImportedExpense(expense) {
+    return expense && typeof expense === "object" && Number.isFinite(Number(expense.amount))
+      && Number(expense.amount) > 0 && isValidDate(expense.date)
+      && typeof expense.category === "string" && typeof expense.description === "string"
+      && typeof expense.paymentMethod === "string";
+  }
+
+  function sanitizeBudgets(budgets) {
+    return Object.fromEntries(Object.entries(budgets)
+      .filter(([month, amount]) => /^\d{4}-\d{2}$/.test(month) && Number.isFinite(Number(amount)) && Number(amount) >= 0)
+      .map(([month, amount]) => [month, roundMoney(Number(amount))]));
   }
 
   function getFilteredExpenses() {
